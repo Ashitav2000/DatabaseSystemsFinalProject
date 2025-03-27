@@ -1,0 +1,223 @@
+use FinalProject_EMSystem;
+/* Query - 1: Task 5.a.i. Retrieve the names, descriptions, and start dates of all events in the database */
+SELECT Name, Description, StartDate
+FROM events;
+
+/* Query - 2: Task 5.a.ii. Retrieve details of upcoming events from the database */
+
+USE FinalProject_EMSystem;
+SELECT Name, StartDate, EndDate
+FROM events
+WHERE StartDate >= CURDATE()
+ORDER BY StartDate ASC;
+
+
+/* Query - 3: Task 5.a.iii. Retrieve a distinct list of participant types */
+SELECT DISTINCT Type
+FROM participants;
+
+
+/* Query - 4: Task 5.a.iv. Select the details of registration number 2 where either the email or phone number is provided */
+SELECT *
+FROM registrations
+WHERE EventID = 2 AND (Email IS NOT NULL OR Phone IS NOT NULL);
+
+
+/* Query - 5: Task 5.a.v. Select the names and mobile numbers where the participant type is either sister or brother */
+SELECT concat(firstname,' ',lastname) as ParticipantName, mobilenumber
+FROM participants
+WHERE Type IN ('Sister', 'Brother');
+
+
+/* Query - 6: Task 5.a.vi. Retrieve all details of organizers whose name contains the word 'Events' */
+SELECT *
+FROM organizers
+WHERE Name LIKE '%Events%';
+
+
+/* 5.b. Aggregate Functions*/
+/* Query - 7: Task 5.b.i. Calculate the total number of events in the events table and return the result as "TotalEvents" */
+SELECT COUNT(*) AS TotalEvents
+FROM events;
+
+
+
+/* Query - 8: Task 5.b.ii. Calculate the sum of all participant IDs in the participants table and return the result as "TotalParticipantIDs" */
+SELECT SUM(ParticipantID) AS TotalParticipantIDs
+FROM participants;
+
+
+/* Query - 9: Task 5.b.iii. Query: Retrieve the maximum registration ID for each event from the registrations table. */
+SELECT EventID, max(RegistrationID) AS MaxRegistrations 
+FROM registrations GROUP BY EventID;
+
+
+/*5.c. Joins*/
+/* Query - 10: Task 5.c.i. Retrieve pairs of participants registered for the same event */
+SELECT r1.EventID, r1.ParticipantID AS Participant1, r2.ParticipantID AS Participant2
+FROM registrations r1
+JOIN registrations r2 ON r1.EventID = r2.EventID
+WHERE r1.ParticipantID <> r2.ParticipantID
+ORDER BY r1.EventID, r1.ParticipantID, r2.ParticipantID;
+
+
+
+/* Query - 11: Task 5.c.ii. Retrieve details of events along with their corresponding organizers */
+SELECT e.EventID, e.Name AS EventName, o.Name AS OrganizerName
+FROM events e
+JOIN organizers o ON e.OrganizerID = o.OrganizerID;
+
+
+/* Query - 12: Task 5.c.iii. Retrieve details of events and their corresponding organizers, including events without organizers */
+SELECT e.EventID, e.Name AS EventName, o.Name AS OrganizerName
+FROM events e
+LEFT JOIN organizers o ON e.OrganizerID = o.OrganizerID;
+
+
+/*5.d. Group by*/
+/* Query - 13: Task 5.d.i. Retrieve the count of participants for each event where the count is 2 or more */
+SELECT e.EventID, e.Name AS EventName, COUNT(p.ParticipantID) AS ParticipantCount
+FROM events e
+INNER JOIN registrations r ON e.EventID = r.EventID
+INNER JOIN participants p ON r.ParticipantID = p.ParticipantID
+GROUP BY e.EventID, e.Name
+HAVING COUNT(p.ParticipantID) >= 2;
+
+
+
+
+/*5.e. Views*/
+/* Query - 14: Task 5.e.i. View to retrieve details of events along with their corresponding organizer information */
+CREATE VIEW EventOrganizerView AS
+SELECT e.EventID, e.Name AS EventName, e.Description, o.OrganizerID, o.Name AS OrganizerName, o.MobileNumber, o.Email
+FROM events e
+JOIN organizers o ON e.OrganizerID = o.OrganizerID;
+
+Select * from EventOrganizerView;
+
+
+
+/* Query - 15: Task 5.e.ii. View to retrieve event details along with their corresponding venue information */
+CREATE VIEW EventVenueView AS
+SELECT e.EventID, e.Name AS EventName, e.Description, v.VenueID, v.VenueName, v.Address, v.Capacity, v.Availability
+FROM events e
+JOIN venues v ON e.VenueID = v.VenueID;
+
+select * from EventVenueView;
+
+
+
+/* Query - 16: Task 5.e.iii. View to retrieve registration details of participants along with event and participant information */
+CREATE VIEW RegistrationDetailsView AS
+SELECT r.RegistrationID, e.EventID, e.Name AS EventName, p.ParticipantID, p.FirstName, p.LastName, p.Sex, p.MobileNumber, p.Email
+FROM registrations r
+JOIN events e ON r.EventID = e.EventID
+JOIN participants p ON r.ParticipantID = p.ParticipantID;
+
+select * from RegistrationDetailsView;
+
+
+
+/*5.f. Triggers*/
+/* Query - 17: Task 5.f.i. Trigger to update the event count for an organizer when a new event is added */
+
+DELIMITER //
+CREATE TRIGGER `events_BEFORE_INSERTT`
+BEFORE INSERT ON `events` 
+FOR EACH ROW
+BEGIN
+    IF NEW.StartDate < CURDATE() THEN
+        SET NEW.Status = 'Past';
+    ELSE
+        SET NEW.Status = 'Upcoming';
+    END IF;
+END;
+//
+DELIMITER ;
+
+select * from events;
+
+
+
+/* Query - 18: Task 5.f.ii. Trigger to automatically update the event status when the start date has passed */
+
+ALTER TABLE organizers
+ADD COLUMN EventCount INT DEFAULT 0;
+
+DELIMITER //
+CREATE TRIGGER `events_AFTER_INSERT`
+AFTER INSERT ON `events` FOR EACH ROW
+BEGIN
+    UPDATE organizers
+    SET EventCount = EventCount + 1
+    WHERE OrganizerID = NEW.OrganizerID;
+END;
+//
+DELIMITER ;
+
+select * from organizers;
+
+
+-- Inserting data into the `events` table
+INSERT INTO events(EventID, Name, Description, StartDate, EndDate, OrganizerID, VenueID) VALUES (6, 'Marriage Event', 'Traditional Marriage', '2023-12-28', '2023-12-31', 1111, 101);
+
+
+/* Query - 19: Task 5.f.iii. Trigger to convert FirstName to uppercase before insertion */
+DELIMITER //
+CREATE TRIGGER `participants_BEFORE_INSERT` 
+BEFORE INSERT ON `participants` 
+FOR EACH ROW BEGIN
+SET NEW.FirstName = UPPER(NEW.FirstName);
+END
+//
+DELIMITER ;
+
+-- Add a new column for the Type in the `participants` table
+ALTER TABLE `participants`
+    ADD COLUMN `Type` VARCHAR(45) NOT NULL;
+
+-- Insert sample data into the `participants` table with the Type information
+UPDATE `participants` SET `Type` = 'Brother' WHERE `ParticipantID` = 20;
+UPDATE `participants` SET `Type` = 'Sister' WHERE `ParticipantID` = 21;
+UPDATE `participants` SET `Type` = 'Brother' WHERE `ParticipantID` = 22;
+UPDATE `participants` SET `Type` = 'Cousin' WHERE `ParticipantID` = 23;
+UPDATE `participants` SET `Type` = 'Uncle' WHERE `ParticipantID` = 24;
+
+
+
+select * from participants;
+
+-- 3 NORMALIZATION FORM
+
+CREATE TABLE categories (
+    CategoryID INT PRIMARY KEY,
+    CategoryName VARCHAR(255)
+);
+
+CREATE TABLE locations (
+    LocationID INT PRIMARY KEY,
+    LocationName VARCHAR(255)
+);
+
+CREATE TABLE eventsta (
+    EventID INT PRIMARY KEY,
+    EventName VARCHAR(255),
+    StartDate DATE,
+    EndDate DATE,
+    Status VARCHAR(20),
+    CategoryID INT,
+    LocationID INT,
+    FOREIGN KEY (CategoryID) REFERENCES categories(CategoryID),
+    FOREIGN KEY (LocationID) REFERENCES locations(LocationID)
+);
+
+-- Retrieve events with category and location information
+SELECT e.EventID,e.EventName,e.StartDate,e.EndDate,e.Status,c.CategoryName,l.LocationName
+FROM eventsta e
+JOIN categories c ON e.CategoryID = c.CategoryID
+JOIN locations l ON e.LocationID = l.LocationID;
+
+
+
+
+
